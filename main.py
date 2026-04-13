@@ -49,8 +49,8 @@ def load_topics(config_path: str = "config/topics.yaml") -> list[dict]:
 def main() -> None:
     azure_api_key = _require_env("AZURE_OPENAI_API_KEY")
     azure_endpoint = _require_env("AZURE_OPENAI_ENDPOINT")
-    deployment = os.environ.get("AZURE_OPENAI_DEPLOYMENT", "gpt-4o")
-    api_version = os.environ.get("AZURE_OPENAI_API_VERSION", "2024-12-01-preview")
+    deployment = os.environ.get("AZURE_OPENAI_DEPLOYMENT") or "gpt-4o"
+    api_version = os.environ.get("AZURE_OPENAI_API_VERSION") or "2024-12-01-preview"
     email_to = _require_env("EMAIL_TO")
     acs_connection_string = _require_env("ACS_CONNECTION_STRING")
     acs_sender_address = _require_env("ACS_SENDER_ADDRESS")
