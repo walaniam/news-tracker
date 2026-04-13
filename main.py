@@ -1,14 +1,12 @@
 """Entry point for the Daily News Scout.
 
 Environment variables (set in .env locally or as GitHub Secrets in CI):
-  OPENAI_API_KEY  – required
-  EMAIL_TO        – required
-  SMTP_HOST       – default: smtp.gmail.com
-  SMTP_PORT       – default: 587
-  SMTP_USER       – required
-  SMTP_PASSWORD   – required
-  OPENAI_MODEL    – default: gpt-4o
-  TOPICS_CONFIG   – path to topics YAML, default: config/topics.yaml
+  OPENAI_API_KEY         – required
+  EMAIL_TO               – required
+  ACS_CONNECTION_STRING  – required (Azure Communication Services connection string)
+  ACS_SENDER_ADDRESS     – required (verified sender, e.g. DoNotReply@<domain>.azurecomm.net)
+  OPENAI_MODEL           – default: gpt-4o
+  TOPICS_CONFIG          – path to topics YAML, default: config/topics.yaml
 """
 
 import logging
@@ -49,10 +47,8 @@ def load_topics(config_path: str = "config/topics.yaml") -> list[dict]:
 def main() -> None:
     openai_api_key = _require_env("OPENAI_API_KEY")
     email_to = _require_env("EMAIL_TO")
-    smtp_user = _require_env("SMTP_USER")
-    smtp_password = _require_env("SMTP_PASSWORD")
-    smtp_host = os.environ.get("SMTP_HOST", "smtp.gmail.com")
-    smtp_port = int(os.environ.get("SMTP_PORT", "587"))
+    acs_connection_string = _require_env("ACS_CONNECTION_STRING")
+    acs_sender_address = _require_env("ACS_SENDER_ADDRESS")
     model = os.environ.get("OPENAI_MODEL", "gpt-4o")
     topics_path = os.environ.get("TOPICS_CONFIG", "config/topics.yaml")
 
@@ -79,7 +75,7 @@ def main() -> None:
             logger.error("Failed to scout '%s': %s", topic_name, exc)
             reports[topic_name] = f"*Error generating report: {exc}*\n"
 
-    sender = EmailSender(smtp_host, smtp_port, smtp_user, smtp_password)
+    sender = EmailSender(acs_connection_string, acs_sender_address)
     sender.send_report(email_to, reports)
     logger.info("All done.")
 

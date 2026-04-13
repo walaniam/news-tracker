@@ -1,12 +1,10 @@
-"""Email sender for the daily news scout report."""
+"""Email sender for the daily news scout report (Azure Communication Services)."""
 
 import logging
-import smtplib
 from datetime import datetime, timezone
-from email.mime.multipart import MIMEMultipart
-from email.mime.text import MIMEText
 
 import markdown as md
+from azure.communication.email import EmailClient
 
 logger = logging.getLogger(__name__)
 
@@ -32,19 +30,17 @@ code { background: #f0f0f0; padding: 2px 4px; border-radius: 3px; }
 
 
 class EmailSender:
-    """Sends the daily news report via SMTP."""
+    """Sends the daily news report via Azure Communication Services (ACS)."""
 
-    def __init__(
-        self,
-        smtp_host: str,
-        smtp_port: int,
-        username: str,
-        password: str,
-    ):
-        self.smtp_host = smtp_host
-        self.smtp_port = smtp_port
-        self.username = username
-        self.password = password
+    def __init__(self, connection_string: str, sender_address: str):
+        """
+        Args:
+            connection_string: ACS resource connection string.
+            sender_address:    Verified sender email address configured in ACS
+                               (e.g. ``DoNotReply@<domain>.azurecomm.net``).
+        """
+        self.sender_address = sender_address
+        self._client = EmailClient.from_connection_string(connection_string)
 
     # ------------------------------------------------------------------
     # Public API
@@ -56,7 +52,7 @@ class EmailSender:
         reports: dict[str, str],
         date: datetime | None = None,
     ) -> None:
-        """Compose and send the daily report email.
+        """Compose and send the daily report email via ACS.
 
         Args:
             recipient: destination email address.
@@ -71,21 +67,23 @@ class EmailSender:
 
         plain, html = self._build_body(reports, date_str)
 
-        msg = MIMEMultipart("alternative")
-        msg["Subject"] = subject
-        msg["From"] = self.username
-        msg["To"] = recipient
-        msg.attach(MIMEText(plain, "plain", "utf-8"))
-        msg.attach(MIMEText(html, "html", "utf-8"))
+        message = {
+            "senderAddress": self.sender_address,
+            "recipients": {"to": [{"address": recipient}]},
+            "content": {
+                "subject": subject,
+                "plainText": plain,
+                "html": html,
+            },
+        }
 
-        with smtplib.SMTP(self.smtp_host, self.smtp_port) as server:
-            server.ehlo()
-            server.starttls()
-            server.ehlo()
-            server.login(self.username, self.password)
-            server.sendmail(self.username, [recipient], msg.as_string())
-
-        logger.info("Report email sent to %s", recipient)
+        poller = self._client.begin_send(message)
+        result = poller.result()
+        logger.info(
+            "Report email sent to %s via ACS (message id: %s)",
+            recipient,
+            result.get("id", "unknown"),
+        )
 
     # ------------------------------------------------------------------
     # Internal helpers

@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
 
 # Minimal permissions – this workflow only reads the repository and calls
-# external APIs (OpenAI, SMTP). No write access to the repo is needed.
+# external APIs (OpenAI, Azure Communication Services). No write access to the repo is needed.
 permissions:
   contents: read
 
@@ -31,12 +31,10 @@ jobs:
 
       - name: Run News Scout
         env:
-          OPENAI_API_KEY:  ${{ secrets.OPENAI_API_KEY }}
-          EMAIL_TO:        ${{ secrets.EMAIL_TO }}
-          SMTP_HOST:       ${{ secrets.SMTP_HOST }}
-          SMTP_PORT:       ${{ secrets.SMTP_PORT }}
-          SMTP_USER:       ${{ secrets.SMTP_USER }}
-          SMTP_PASSWORD:   ${{ secrets.SMTP_PASSWORD }}
+          OPENAI_API_KEY:          ${{ secrets.OPENAI_API_KEY }}
+          EMAIL_TO:                ${{ secrets.EMAIL_TO }}
+          ACS_CONNECTION_STRING:   ${{ secrets.ACS_CONNECTION_STRING }}
+          ACS_SENDER_ADDRESS:      ${{ secrets.ACS_SENDER_ADDRESS }}
           # Optional – override the default model (gpt-4o)
-          OPENAI_MODEL:    ${{ vars.OPENAI_MODEL }}
+          OPENAI_MODEL:            ${{ vars.OPENAI_MODEL }}
         run: python main.py

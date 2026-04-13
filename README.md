@@ -15,7 +15,7 @@ sends you a concise, synthesised daily email report.
 | Easily configurable topics | Edit `config/topics.yaml` – no code changes needed |
 | Daily email with summary / trends | `EmailSender` composes an HTML + plain-text email every day |
 | GitHub Actions automation | `.github/workflows/news_scout.yml` – scheduled at 08:00 UTC |
-| Simple deployment | Fork → set six secrets → done |
+| Simple deployment | Fork → set four secrets → done |
 
 ---
 
@@ -28,7 +28,7 @@ news-tracker/
 │   └── topics.yaml                    # ← Edit this to change topics
 ├── news_scout/
 │   ├── agent.py                       # LLM-driven scouting agent
-│   └── email_sender.py                # SMTP email sender
+│   └── email_sender.py                # ACS email sender
 ├── tests/
 │   ├── test_agent.py
 │   └── test_email_sender.py
@@ -63,7 +63,19 @@ topics:
 
 Commit and push the change.
 
-### 3. Set repository secrets
+### 3. Set up Azure Communication Services (Email)
+
+This project uses **Azure Communication Services (ACS)** for reliable, no-SMTP email delivery.
+
+1. In the [Azure Portal](https://portal.azure.com), create an **Azure Communication Services** resource.
+2. Inside that resource, add an **Email Communication Service** and provision a domain
+   (the free `*.azurecomm.net` domain works with no DNS changes).
+3. Link the Email Communication Service domain to your ACS resource
+   (**Try email → Connect domain**).
+4. From the ACS resource's **Keys** blade, copy the **Connection string**.
+5. Note the sender address shown in the portal (e.g. `DoNotReply@<subdomain>.azurecomm.net`).
+
+### 4. Set repository secrets
 
 Go to **Settings → Secrets and variables → Actions** and add:
 
@@ -71,13 +83,8 @@ Go to **Settings → Secrets and variables → Actions** and add:
 |---|---|
 | `OPENAI_API_KEY` | Your OpenAI API key |
 | `EMAIL_TO` | Recipient e-mail address |
-| `SMTP_HOST` | SMTP server host (e.g. `smtp.gmail.com`) |
-| `SMTP_PORT` | SMTP port (e.g. `587`) |
-| `SMTP_USER` | Sender e-mail address |
-| `SMTP_PASSWORD` | Sender SMTP password or App Password |
-
-> **Gmail tip** – use an [App Password](https://support.google.com/accounts/answer/185833) instead of
-> your normal password. Enable 2-Step Verification first, then generate a dedicated app password.
+| `ACS_CONNECTION_STRING` | ACS resource connection string (from the Keys blade) |
+| `ACS_SENDER_ADDRESS` | Verified sender address (e.g. `DoNotReply@<subdomain>.azurecomm.net`) |
 
 #### Optional repository variable
 
@@ -87,7 +94,7 @@ Go to **Settings → Secrets and variables → Actions** and add:
 
 Set this under **Settings → Secrets and variables → Actions → Variables**.
 
-### 4. Enable the workflow
+### 5. Enable the workflow
 
 The workflow runs automatically at **08:00 UTC** every day.  
 To trigger it immediately: **Actions → Daily News Scout → Run workflow**.
@@ -108,7 +115,7 @@ pip install -r requirements.txt
 
 # 3. Configure credentials
 cp .env.example .env
-# Edit .env with your keys and SMTP settings
+# Edit .env with your ACS connection string, sender address, and OpenAI key
 
 # 4. Run
 python main.py
@@ -140,7 +147,7 @@ For each topic in config/topics.yaml
             • Regional Perspectives
             • Notable Sources & Links
 │
-└─ [SMTP] Send combined HTML email to configured recipient
+└─ [ACS]  Send combined HTML email via Azure Communication Services
 ```
 
 ---
@@ -151,10 +158,8 @@ For each topic in config/topics.yaml
 |---|---|---|---|
 | `OPENAI_API_KEY` | ✅ | – | OpenAI API key |
 | `EMAIL_TO` | ✅ | – | Report recipient |
-| `SMTP_HOST` | ✅ | `smtp.gmail.com` | SMTP server |
-| `SMTP_PORT` | ✅ | `587` | SMTP port |
-| `SMTP_USER` | ✅ | – | Sender address |
-| `SMTP_PASSWORD` | ✅ | – | Sender SMTP password |
+| `ACS_CONNECTION_STRING` | ✅ | – | ACS resource connection string |
+| `ACS_SENDER_ADDRESS` | ✅ | – | Verified ACS sender address |
 | `OPENAI_MODEL` | ❌ | `gpt-4o` | OpenAI model to use |
 | `TOPICS_CONFIG` | ❌ | `config/topics.yaml` | Path to topics file |
 

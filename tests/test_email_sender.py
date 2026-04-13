@@ -1,4 +1,4 @@
-"""Tests for EmailSender."""
+"""Tests for EmailSender (Azure Communication Services backend)."""
 
 from datetime import datetime
 from unittest.mock import MagicMock, patch
@@ -7,10 +7,20 @@ import pytest
 
 from news_scout.email_sender import EmailSender
 
+_FAKE_CONN_STR = (
+    "endpoint=https://example.communication.azure.com/;accesskey=ZmFrZWtleQ=="
+)
+_FAKE_SENDER = "DoNotReply@example.azurecomm.net"
+
 
 @pytest.fixture()
 def sender() -> EmailSender:
-    return EmailSender("smtp.gmail.com", 587, "sender@example.com", "secret")
+    with patch(
+        "news_scout.email_sender.EmailClient.from_connection_string"
+    ) as mock_factory:
+        mock_factory.return_value = MagicMock()
+        s = EmailSender(_FAKE_CONN_STR, _FAKE_SENDER)
+    return s
 
 
 class TestBuildBody:
@@ -38,45 +48,53 @@ class TestBuildBody:
 
 
 class TestSendReport:
-    def test_send_calls_smtp_correctly(self, sender):
-        mock_server = MagicMock()
+    def _make_sender_with_mock_client(self) -> tuple[EmailSender, MagicMock]:
+        mock_client = MagicMock()
+        with patch(
+            "news_scout.email_sender.EmailClient.from_connection_string",
+            return_value=mock_client,
+        ):
+            s = EmailSender(_FAKE_CONN_STR, _FAKE_SENDER)
+        return s, mock_client
 
-        with patch("smtplib.SMTP") as mock_smtp_cls:
-            mock_smtp_cls.return_value.__enter__ = MagicMock(return_value=mock_server)
-            mock_smtp_cls.return_value.__exit__ = MagicMock(return_value=False)
+    def test_send_calls_acs_begin_send(self):
+        sender, mock_client = self._make_sender_with_mock_client()
+        mock_client.begin_send.return_value.result.return_value = {"id": "msg-123"}
 
-            sender.send_report(
-                "recipient@example.com",
-                {"Tech": "Some tech news."},
-                datetime(2024, 1, 15),
-            )
+        sender.send_report(
+            "recipient@example.com",
+            {"Tech": "Some tech news."},
+            datetime(2024, 1, 15),
+        )
 
-        mock_smtp_cls.assert_called_once_with("smtp.gmail.com", 587)
-        mock_server.starttls.assert_called_once()
-        mock_server.login.assert_called_once_with("sender@example.com", "secret")
-        mock_server.sendmail.assert_called_once()
-        # Verify recipient address
-        _, call_args, _ = mock_server.sendmail.mock_calls[0]
-        assert call_args[1] == ["recipient@example.com"]
+        mock_client.begin_send.assert_called_once()
+        call_kwargs = mock_client.begin_send.call_args[0][0]
+        assert call_kwargs["senderAddress"] == _FAKE_SENDER
+        assert call_kwargs["recipients"]["to"][0]["address"] == "recipient@example.com"
 
-    def test_subject_includes_date(self, sender):
-        mock_server = MagicMock()
-        captured: list[str] = []
+    def test_subject_includes_date(self):
+        sender, mock_client = self._make_sender_with_mock_client()
+        mock_client.begin_send.return_value.result.return_value = {"id": "msg-456"}
 
-        def capture_sendmail(from_addr, to_addrs, msg_str):
-            captured.append(msg_str)
+        sender.send_report(
+            "r@example.com",
+            {"News": "content"},
+            datetime(2024, 7, 4),
+        )
 
-        mock_server.sendmail.side_effect = capture_sendmail
+        call_kwargs = mock_client.begin_send.call_args[0][0]
+        assert "2024-07-04" in call_kwargs["content"]["subject"]
 
-        with patch("smtplib.SMTP") as mock_smtp_cls:
-            mock_smtp_cls.return_value.__enter__ = MagicMock(return_value=mock_server)
-            mock_smtp_cls.return_value.__exit__ = MagicMock(return_value=False)
+    def test_both_plain_and_html_content_sent(self):
+        sender, mock_client = self._make_sender_with_mock_client()
+        mock_client.begin_send.return_value.result.return_value = {"id": "msg-789"}
 
-            sender.send_report(
-                "r@example.com",
-                {"News": "content"},
-                datetime(2024, 7, 4),
-            )
+        sender.send_report(
+            "r@example.com",
+            {"Topic": "Report content."},
+            datetime(2024, 3, 1),
+        )
 
-        assert captured, "sendmail was not called"
-        assert "2024-07-04" in captured[0]
+        call_kwargs = mock_client.begin_send.call_args[0][0]
+        assert "Topic" in call_kwargs["content"]["plainText"]
+        assert "<html" in call_kwargs["content"]["html"]
