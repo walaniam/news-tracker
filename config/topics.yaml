@@ -1,0 +1,19 @@
+# Topics to scout. Add, remove or edit entries freely.
+# Each topic has a name (used in reports) and a description (used by the AI to
+# choose relevant news portals and filter results).
+
+topics:
+  - name: "Middle East Conflict"
+    description: >
+      Ongoing conflicts, diplomacy, ceasefire negotiations, and humanitarian
+      situations in the Middle East, including Gaza, Lebanon, and the wider region.
+
+  - name: "Artificial Intelligence"
+    description: >
+      AI technology breakthroughs, large language models, regulation, safety,
+      and the societal and economic impact of AI systems.
+
+  - name: "Climate Change"
+    description: >
+      Climate policy, COP summits, extreme weather events, renewable energy
+      expansion, and environmental news from around the world.
