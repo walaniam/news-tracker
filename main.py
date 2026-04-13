@@ -1,12 +1,14 @@
 """Entry point for the Daily News Scout.
 
 Environment variables (set in .env locally or as GitHub Secrets in CI):
-  OPENAI_API_KEY         – required
-  EMAIL_TO               – required
-  ACS_CONNECTION_STRING  – required (Azure Communication Services connection string)
-  ACS_SENDER_ADDRESS     – required (verified sender, e.g. DoNotReply@<domain>.azurecomm.net)
-  OPENAI_MODEL           – default: gpt-4o
-  TOPICS_CONFIG          – path to topics YAML, default: config/topics.yaml
+  AZURE_OPENAI_API_KEY       – required (Azure OpenAI resource key)
+  AZURE_OPENAI_ENDPOINT      – required (e.g. https://<resource>.openai.azure.com/)
+  AZURE_OPENAI_DEPLOYMENT    – optional, default: gpt-4o (deployment / model name)
+  AZURE_OPENAI_API_VERSION   – optional, default: 2024-12-01-preview
+  EMAIL_TO                   – required
+  ACS_CONNECTION_STRING      – required (Azure Communication Services connection string)
+  ACS_SENDER_ADDRESS         – required (verified sender, e.g. DoNotReply@<domain>.azurecomm.net)
+  TOPICS_CONFIG              – path to topics YAML, default: config/topics.yaml
 """
 
 import logging
@@ -15,7 +17,7 @@ import sys
 
 import yaml
 from dotenv import load_dotenv
-from openai import OpenAI
+from openai import AzureOpenAI
 
 from news_scout.agent import NewsScoutAgent
 from news_scout.email_sender import EmailSender
@@ -45,11 +47,13 @@ def load_topics(config_path: str = "config/topics.yaml") -> list[dict]:
 
 
 def main() -> None:
-    openai_api_key = _require_env("OPENAI_API_KEY")
+    azure_api_key = _require_env("AZURE_OPENAI_API_KEY")
+    azure_endpoint = _require_env("AZURE_OPENAI_ENDPOINT")
+    deployment = os.environ.get("AZURE_OPENAI_DEPLOYMENT", "gpt-4o")
+    api_version = os.environ.get("AZURE_OPENAI_API_VERSION", "2024-12-01-preview")
     email_to = _require_env("EMAIL_TO")
     acs_connection_string = _require_env("ACS_CONNECTION_STRING")
     acs_sender_address = _require_env("ACS_SENDER_ADDRESS")
-    model = os.environ.get("OPENAI_MODEL", "gpt-4o")
     topics_path = os.environ.get("TOPICS_CONFIG", "config/topics.yaml")
 
     topics = load_topics(topics_path)
@@ -61,8 +65,12 @@ def main() -> None:
         "Loaded %d topic(s): %s", len(topics), [t.get("name") for t in topics]
     )
 
-    client = OpenAI(api_key=openai_api_key)
-    agent = NewsScoutAgent(client, model=model)
+    client = AzureOpenAI(
+        api_key=azure_api_key,
+        azure_endpoint=azure_endpoint,
+        api_version=api_version,
+    )
+    agent = NewsScoutAgent(client, model=deployment)
 
     reports: dict[str, str] = {}
     for topic in topics:

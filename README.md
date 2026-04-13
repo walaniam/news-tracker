@@ -10,7 +10,7 @@ sends you a concise, synthesised daily email report.
 | Requirement | How it is met |
 |---|---|
 | Scans up to 10 portals per topic | The LLM picks portals at runtime; the agent fetches their RSS feeds |
-| Portals chosen by AI, not hardcoded | GPT-4o selects sources based on topic context |
+| Portals chosen by AI, not hardcoded | Azure OpenAI selects sources based on topic context |
 | Global sources (not only Western media) | The prompt explicitly asks for regional and local outlets |
 | Easily configurable topics | Edit `config/topics.yaml` – no code changes needed |
 | Daily email with summary / trends | `EmailSender` composes an HTML + plain-text email every day |
@@ -118,18 +118,20 @@ Go to **Settings → Secrets and variables → Actions** and add:
 
 | Secret name | Description |
 |---|---|
-| `OPENAI_API_KEY` | Your OpenAI API key |
+| `AZURE_OPENAI_API_KEY` | Azure OpenAI resource key (from the **Keys** blade in Azure Portal) |
+| `AZURE_OPENAI_ENDPOINT` | Azure OpenAI endpoint URL (e.g. `https://<resource>.openai.azure.com/`) |
 | `EMAIL_TO` | Recipient e-mail address |
 | `ACS_CONNECTION_STRING` | ACS resource connection string (from the Keys blade) |
 | `ACS_SENDER_ADDRESS` | Verified sender address (e.g. `DoNotReply@<subdomain>.azurecomm.net`) |
 
-#### Optional repository variable
+#### Optional repository variables
 
 | Variable name | Default | Description |
 |---|---|---|
-| `OPENAI_MODEL` | `gpt-4o` | Override the OpenAI model (e.g. `gpt-4o-mini` to reduce cost) |
+| `AZURE_OPENAI_DEPLOYMENT` | `gpt-4o` | Azure OpenAI deployment name (the model deployment you created in [Azure AI Foundry](https://ai.azure.com)) |
+| `AZURE_OPENAI_API_VERSION` | `2024-12-01-preview` | Azure OpenAI REST API version |
 
-Set this under **Settings → Secrets and variables → Actions → Variables**.
+Set these under **Settings → Secrets and variables → Actions → Variables**.
 
 ### 5. Enable the workflow
 
@@ -152,7 +154,7 @@ pip install -r requirements.txt
 
 # 3. Configure credentials
 cp .env.example .env
-# Edit .env with your ACS connection string, sender address, and OpenAI key
+# Edit .env with your ACS connection string, sender address, and Azure OpenAI credentials
 
 # 4. Run
 python main.py
@@ -193,11 +195,13 @@ For each topic in config/topics.yaml
 
 | Variable | Required | Default | Description |
 |---|---|---|---|
-| `OPENAI_API_KEY` | ✅ | – | OpenAI API key |
+| `AZURE_OPENAI_API_KEY` | ✅ | – | Azure OpenAI resource key |
+| `AZURE_OPENAI_ENDPOINT` | ✅ | – | Azure OpenAI endpoint URL |
+| `AZURE_OPENAI_DEPLOYMENT` | ❌ | `gpt-4o` | Deployment name (model) in Azure AI Foundry |
+| `AZURE_OPENAI_API_VERSION` | ❌ | `2024-12-01-preview` | Azure OpenAI REST API version |
 | `EMAIL_TO` | ✅ | – | Report recipient |
 | `ACS_CONNECTION_STRING` | ✅ | – | ACS resource connection string |
 | `ACS_SENDER_ADDRESS` | ✅ | – | Verified ACS sender address |
-| `OPENAI_MODEL` | ❌ | `gpt-4o` | OpenAI model to use |
 | `TOPICS_CONFIG` | ❌ | `config/topics.yaml` | Path to topics file |
 
 ---
