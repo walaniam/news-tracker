@@ -1,0 +1,40 @@
+name: Daily News Scout
+
+on:
+  schedule:
+    # Runs every day at 08:00 UTC
+    - cron: "0 8 * * *"
+  # Allow a manual run from the Actions tab
+  workflow_dispatch:
+
+# Minimal permissions – this workflow only reads the repository and calls
+# external APIs (OpenAI, Azure Communication Services). No write access to the repo is needed.
+permissions:
+  contents: read
+
+jobs:
+  scout:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run News Scout
+        env:
+          OPENAI_API_KEY:          ${{ secrets.OPENAI_API_KEY }}
+          EMAIL_TO:                ${{ secrets.EMAIL_TO }}
+          ACS_CONNECTION_STRING:   ${{ secrets.ACS_CONNECTION_STRING }}
+          ACS_SENDER_ADDRESS:      ${{ secrets.ACS_SENDER_ADDRESS }}
+          # Optional – override the default model (gpt-4o)
+          OPENAI_MODEL:            ${{ vars.OPENAI_MODEL }}
+        run: python main.py
