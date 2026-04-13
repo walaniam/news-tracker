@@ -70,73 +70,37 @@ This project uses **Azure Communication Services (ACS)** for reliable, no-SMTP e
 #### Prerequisites
 
 - [Azure CLI](https://learn.microsoft.com/cli/azure/install-azure-cli) installed and logged in (`az login`)
-- The `communication` CLI extension (installed automatically by the commands below if missing)
+- The `communication` CLI extension (installed automatically by the script if missing)
 
 #### Azure CLI setup (recommended)
 
-Run the following commands once. Replace the placeholder values (`<…>`) with your own names.
+A ready-to-run script is provided at [`scripts/setup_acs.sh`](scripts/setup_acs.sh).
+
+All configurable values are set through environment variables (shown with their defaults):
+
+| Variable | Default | Description |
+|---|---|---|
+| `RESOURCE_GROUP` | `news-tracker-rg` | Azure resource group name |
+| `LOCATION` | `eastus` | Azure region (`az account list-locations -o table`) |
+| `ACS_NAME` | `news-tracker-acs` | ACS resource name |
+| `EMAIL_SERVICE_NAME` | `news-tracker-email` | Email Communication Service name |
+
+Run the script once:
 
 ```bash
-# Variables – change these to your preferred names/region
-RESOURCE_GROUP="news-tracker-rg"
-LOCATION="eastus"                        # az account list-locations -o table
-ACS_NAME="news-tracker-acs"
-EMAIL_SERVICE_NAME="news-tracker-email"
+# Optional: override defaults via env vars
+# export RESOURCE_GROUP="my-rg"
+# export LOCATION="westeurope"
 
-# 1. Create a resource group (skip if you already have one)
-az group create --name "$RESOURCE_GROUP" --location "$LOCATION"
-
-# 2. Create the ACS resource
-az communication create \
-  --name "$ACS_NAME" \
-  --resource-group "$RESOURCE_GROUP" \
-  --location "Global" \
-  --data-location "United States"
-
-# 3. Create the Email Communication Service
-az communication email create \
-  --name "$EMAIL_SERVICE_NAME" \
-  --resource-group "$RESOURCE_GROUP" \
-  --location "Global" \
-  --data-location "United States"
-
-# 4. Provision the free Azure-managed domain (no DNS changes required)
-az communication email domain create \
-  --name "AzureManagedDomain" \
-  --email-service-name "$EMAIL_SERVICE_NAME" \
-  --resource-group "$RESOURCE_GROUP" \
-  --location "Global" \
-  --domain-management AzureManaged
-
-# 5. Retrieve the full domain resource ID
-DOMAIN_ID=$(az communication email domain show \
-  --name "AzureManagedDomain" \
-  --email-service-name "$EMAIL_SERVICE_NAME" \
-  --resource-group "$RESOURCE_GROUP" \
-  --query id --output tsv)
-
-# 6. Link the email domain to the ACS resource
-az communication update \
-  --name "$ACS_NAME" \
-  --resource-group "$RESOURCE_GROUP" \
-  --linked-domains "[$DOMAIN_ID]"
-
-# 7. Retrieve the connection string (store this as ACS_CONNECTION_STRING)
-az communication list-key \
-  --name "$ACS_NAME" \
-  --resource-group "$RESOURCE_GROUP" \
-  --query primaryConnectionString --output tsv
-
-# 8. Retrieve the sender address (store this as ACS_SENDER_ADDRESS)
-az communication email domain show \
-  --name "AzureManagedDomain" \
-  --email-service-name "$EMAIL_SERVICE_NAME" \
-  --resource-group "$RESOURCE_GROUP" \
-  --query "mailFromSenderDomain" --output tsv | \
-  awk '{print "DoNotReply@" $1}'
+bash scripts/setup_acs.sh
 ```
 
-> **Tip:** Steps 7 and 8 print the two values you need as GitHub secrets in the next step.
+The script prints the two values you need as GitHub secrets in the next step:
+
+```
+ACS_CONNECTION_STRING=endpoint=https://...
+ACS_SENDER_ADDRESS=DoNotReply@<subdomain>.azurecomm.net
+```
 
 #### Azure Portal setup (optional alternative)
 
