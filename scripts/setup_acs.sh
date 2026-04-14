@@ -8,7 +8,7 @@
 # Configurable via environment variables (all have sensible defaults):
 #
 #   RESOURCE_GROUP      Azure resource group name    (default: news-tracker-rg)
-#   LOCATION            Azure region for the group   (default: eastus)
+#   LOCATION            Azure region for the group   (default: westeurope)
 #   ACS_NAME            ACS resource name            (default: news-tracker-acs)
 #   EMAIL_SERVICE_NAME  Email Communication Service  (default: news-tracker-email)
 #
@@ -26,7 +26,7 @@ set -euo pipefail
 # Configuration – override any of these with environment variables
 # ---------------------------------------------------------------------------
 RESOURCE_GROUP="${RESOURCE_GROUP:-news-tracker-rg}"
-LOCATION="${LOCATION:-eastus}"
+LOCATION="${LOCATION:-westeurope}"
 ACS_NAME="${ACS_NAME:-news-tracker-acs}"
 EMAIL_SERVICE_NAME="${EMAIL_SERVICE_NAME:-news-tracker-email}"
 
