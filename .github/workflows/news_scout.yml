@@ -2,8 +2,8 @@ name: Daily News Scout
 
 on:
   schedule:
-    # Runs every day at 08:00 UTC
-    - cron: "0 8 * * *"
+    # Runs every day at 08:23 UTC (non-zero minute avoids GitHub Actions peak load at :00)
+    - cron: "23 17 * * *"
   # Allow a manual run from the Actions tab
   workflow_dispatch:
 
