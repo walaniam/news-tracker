@@ -237,6 +237,105 @@ class TestGenerateReport:
         assert "No relevant articles" in report
         mock_client.chat.completions.create.assert_not_called()
 
+    def test_language_instruction_added_for_non_english(self, agent, mock_client):
+        mock_client.chat.completions.create.return_value = _make_llm_response(
+            "# Raport\n\nAnaliza."
+        )
+        articles = [
+            {
+                "source": "BBC",
+                "title": "Headline",
+                "summary": "Summary.",
+                "url": "https://bbc.com/art1",
+                "published": "",
+            }
+        ]
+        sources = [{"name": "BBC", "region": "global"}]
+
+        agent.generate_report("Topic", "desc", articles, sources, language="pl")
+
+        call_args = mock_client.chat.completions.create.call_args
+        prompt = call_args[1]["messages"][0]["content"]
+        assert "'pl'" in prompt
+        assert "ENTIRE report" in prompt
+
+    def test_no_language_instruction_for_english(self, agent, mock_client):
+        mock_client.chat.completions.create.return_value = _make_llm_response(
+            "# Report\n\nAnalysis."
+        )
+        articles = [
+            {
+                "source": "BBC",
+                "title": "Headline",
+                "summary": "Summary.",
+                "url": "https://bbc.com/art1",
+                "published": "",
+            }
+        ]
+        sources = [{"name": "BBC", "region": "global"}]
+
+        agent.generate_report("Topic", "desc", articles, sources, language="en")
+
+        call_args = mock_client.chat.completions.create.call_args
+        prompt = call_args[1]["messages"][0]["content"]
+        assert "ENTIRE report" not in prompt
+
+
+# ---------------------------------------------------------------------------
+# translate_email_labels
+# ---------------------------------------------------------------------------
+
+class TestTranslateEmailLabels:
+    def test_returns_english_defaults_without_llm_call(self, agent, mock_client):
+        labels = agent.translate_email_labels("en")
+
+        assert labels["report_title"] == "Daily News Scout Report"
+        assert labels["date_label"] == "Date"
+        assert labels["topic_prefix"] == "Topic"
+        assert "{date}" in labels["subject_template"]
+        mock_client.chat.completions.create.assert_not_called()
+
+    def test_calls_llm_for_non_english(self, agent, mock_client):
+        translated = json.dumps({
+            "report_title": "Codzienny Raport",
+            "date_label": "Data",
+            "topic_prefix": "Temat",
+            "subject_template": "Codzienny Raport – {date}",
+        })
+        mock_client.chat.completions.create.return_value = _make_llm_response(
+            translated
+        )
+
+        labels = agent.translate_email_labels("pl")
+
+        assert labels["report_title"] == "Codzienny Raport"
+        assert labels["date_label"] == "Data"
+        mock_client.chat.completions.create.assert_called_once()
+
+    def test_falls_back_to_english_on_parse_error(self, agent, mock_client):
+        mock_client.chat.completions.create.return_value = _make_llm_response(
+            "not valid json at all"
+        )
+
+        labels = agent.translate_email_labels("de")
+
+        assert labels["report_title"] == "Daily News Scout Report"
+
+    def test_fills_missing_keys_from_defaults(self, agent, mock_client):
+        partial = json.dumps({
+            "report_title": "Rapport Quotidien",
+            "date_label": "Date",
+        })
+        mock_client.chat.completions.create.return_value = _make_llm_response(
+            partial
+        )
+
+        labels = agent.translate_email_labels("fr")
+
+        assert labels["report_title"] == "Rapport Quotidien"
+        assert labels["topic_prefix"] == "Topic"  # English fallback
+        assert "{date}" in labels["subject_template"]  # English fallback
+
 
 # ---------------------------------------------------------------------------
 # scout_topic

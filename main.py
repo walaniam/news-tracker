@@ -9,6 +9,8 @@ Environment variables (set in .env locally or as GitHub Secrets in CI):
   ACS_CONNECTION_STRING      – required (Azure Communication Services connection string)
   ACS_SENDER_ADDRESS         – required (verified sender, e.g. DoNotReply@<domain>.azurecomm.net)
   TOPICS_CONFIG              – path to topics YAML, default: config/topics.yaml
+  REPORT_LANGUAGE            – ISO 639-1 language code for the report email
+                               (e.g. "en", "pl", "de"). Default: en
 """
 
 import logging
@@ -55,6 +57,7 @@ def main() -> None:
     acs_connection_string = _require_env("ACS_CONNECTION_STRING")
     acs_sender_address = _require_env("ACS_SENDER_ADDRESS")
     topics_path = os.environ.get("TOPICS_CONFIG", "config/topics.yaml")
+    report_language = os.environ.get("REPORT_LANGUAGE", "en").strip().lower()
 
     topics = load_topics(topics_path)
     if not topics:
@@ -64,6 +67,7 @@ def main() -> None:
     logger.info(
         "Loaded %d topic(s): %s", len(topics), [t.get("name") for t in topics]
     )
+    logger.info("Report language: %s", report_language)
 
     client = AzureOpenAI(
         api_key=azure_api_key,
@@ -72,11 +76,14 @@ def main() -> None:
     )
     agent = NewsScoutAgent(client, model=deployment)
 
+    # Translate email structural labels (no-op for English)
+    email_labels = agent.translate_email_labels(report_language)
+
     reports: dict[str, str] = {}
     for topic in topics:
         topic_name = topic.get("name", "Unknown")
         try:
-            report, _ = agent.scout_topic(topic)
+            report, _ = agent.scout_topic(topic, language=report_language)
             reports[topic_name] = report
             logger.info("Report ready for: %s", topic_name)
         except Exception as exc:
@@ -84,7 +91,9 @@ def main() -> None:
             reports[topic_name] = f"*Error generating report: {exc}*\n"
 
     sender = EmailSender(acs_connection_string, acs_sender_address)
-    sender.send_report(email_to, reports)
+    sender.send_report(
+        email_to, reports, language=report_language, labels=email_labels
+    )
     logger.info("All done.")
 
 

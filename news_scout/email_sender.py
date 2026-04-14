@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 """Email sender for the daily news scout report (Azure Communication Services)."""
 
 import logging
@@ -46,11 +48,20 @@ class EmailSender:
     # Public API
     # ------------------------------------------------------------------
 
+    _DEFAULT_LABELS = {
+        "report_title": "Daily News Scout Report",
+        "date_label": "Date",
+        "topic_prefix": "Topic",
+        "subject_template": "Daily News Scout Report – {date}",
+    }
+
     def send_report(
         self,
         recipient: str,
         reports: dict[str, str],
         date: datetime | None = None,
+        language: str = "en",
+        labels: dict | None = None,
     ) -> None:
         """Compose and send the daily report email via ACS.
 
@@ -58,14 +69,23 @@ class EmailSender:
             recipient: destination email address.
             reports:   mapping of topic name → Markdown report text.
             date:      report date (defaults to today UTC).
+            language:  ISO 639-1 language code for the email.
+            labels:    translated structural strings (from
+                       ``NewsScoutAgent.translate_email_labels``).
         """
         if date is None:
             date = datetime.now(timezone.utc)
 
-        date_str = date.strftime("%Y-%m-%d")
-        subject = f"Daily News Scout Report – {date_str}"
+        resolved_labels = dict(self._DEFAULT_LABELS)
+        if labels:
+            resolved_labels.update(labels)
 
-        plain, html = self._build_body(reports, date_str)
+        date_str = date.strftime("%Y-%m-%d")
+        subject = resolved_labels["subject_template"].format(date=date_str)
+
+        plain, html = self._build_body(
+            reports, date_str, language=language, labels=resolved_labels
+        )
 
         message = {
             "senderAddress": self.sender_address,
@@ -91,19 +111,30 @@ class EmailSender:
 
     @staticmethod
     def _build_body(
-        reports: dict[str, str], date_str: str
+        reports: dict[str, str],
+        date_str: str,
+        language: str = "en",
+        labels: dict | None = None,
     ) -> tuple[str, str]:
         """Return (plain_text, html) for the combined report."""
+        lbl = dict(EmailSender._DEFAULT_LABELS)
+        if labels:
+            lbl.update(labels)
+
         combined_md = (
-            f"# Daily News Scout Report\n\n**Date:** {date_str}\n\n---\n\n"
+            f"# {lbl['report_title']}\n\n"
+            f"**{lbl['date_label']}:** {date_str}\n\n---\n\n"
         )
         for topic_name, report_text in reports.items():
-            combined_md += f"## Topic: {topic_name}\n\n{report_text}\n\n---\n\n"
+            combined_md += (
+                f"## {lbl['topic_prefix']}: {topic_name}\n\n"
+                f"{report_text}\n\n---\n\n"
+            )
 
         html_body = md.markdown(combined_md, extensions=["extra", "sane_lists"])
         html = (
             "<!DOCTYPE html>\n"
-            "<html lang='en'>\n"
+            f"<html lang='{language}'>\n"
             "<head>\n"
             "  <meta charset='utf-8'>\n"
             "  <meta name='viewport' content='width=device-width, initial-scale=1'>\n"

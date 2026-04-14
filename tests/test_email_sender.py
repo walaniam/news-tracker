@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 """Tests for EmailSender (Azure Communication Services backend)."""
 
 from datetime import datetime
@@ -45,6 +47,31 @@ class TestBuildBody:
         for name in ("Topic A", "Topic B", "Content A", "Content B"):
             assert name in plain
             assert name in html
+
+    def test_html_lang_defaults_to_english(self, sender):
+        _, html = sender._build_body({"T": "text"}, "2024-01-01")
+        assert "<html lang='en'>" in html
+
+    def test_html_lang_set_to_target_language(self, sender):
+        _, html = sender._build_body(
+            {"T": "text"}, "2024-01-01", language="pl"
+        )
+        assert "<html lang='pl'>" in html
+
+    def test_custom_labels_used_in_body(self, sender):
+        labels = {
+            "report_title": "Codzienny Raport",
+            "date_label": "Data",
+            "topic_prefix": "Temat",
+            "subject_template": "Codzienny Raport – {date}",
+        }
+        plain, html = sender._build_body(
+            {"AI": "content"}, "2024-01-15", language="pl", labels=labels
+        )
+        assert "Codzienny Raport" in plain
+        assert "Data" in plain
+        assert "Temat: AI" in plain
+        assert "Codzienny Raport" in html
 
 
 class TestSendReport:
@@ -98,3 +125,25 @@ class TestSendReport:
         call_kwargs = mock_client.begin_send.call_args[0][0]
         assert "Topic" in call_kwargs["content"]["plainText"]
         assert "<html" in call_kwargs["content"]["html"]
+
+    def test_subject_uses_translated_labels(self):
+        sender, mock_client = self._make_sender_with_mock_client()
+        mock_client.begin_send.return_value.result.return_value = {"id": "msg-tr"}
+
+        labels = {
+            "report_title": "Codzienny Raport",
+            "date_label": "Data",
+            "topic_prefix": "Temat",
+            "subject_template": "Codzienny Raport – {date}",
+        }
+        sender.send_report(
+            "r@example.com",
+            {"News": "content"},
+            datetime(2024, 7, 4),
+            language="pl",
+            labels=labels,
+        )
+
+        call_kwargs = mock_client.begin_send.call_args[0][0]
+        assert call_kwargs["content"]["subject"] == "Codzienny Raport – 2024-07-04"
+        assert "<html lang='pl'>" in call_kwargs["content"]["html"]

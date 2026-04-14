@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 """Core news-scouting agent.
 
 Workflow for each topic:
@@ -234,6 +236,7 @@ class NewsScoutAgent:
         topic_description: str,
         articles: list[dict],
         sources: list[dict],
+        language: str = "en",
     ) -> str:
         """Ask the LLM to produce a synthesised Markdown report."""
         if not articles:
@@ -246,6 +249,15 @@ class NewsScoutAgent:
             f"**[{a['source']}]** {a['title']}\n{a['summary']}\n{a['url']}"
             for a in articles[:40]  # cap to keep prompt within token limits
         )
+
+        language_instruction = ""
+        if language != "en":
+            language_instruction = (
+                f"\n\nIMPORTANT: Write the ENTIRE report in the language "
+                f"with ISO 639-1 code '{language}'. All headings, analysis, "
+                f"and prose must be in that language. Source names and URLs "
+                f"may remain in their original form."
+            )
 
         prompt = (
             f'You are an expert news analyst. Based on the articles about '
@@ -261,14 +273,60 @@ class NewsScoutAgent:
             "5. **Notable Sources & Links** – key articles with their URLs.\n\n"
             "Be analytical; synthesise across sources and highlight both consensus "
             "and divergences. Format the report in Markdown."
+            f"{language_instruction}"
         )
         return self._call_llm(prompt, temperature=0.5)
+
+    # ------------------------------------------------------------------
+    # Email label translation
+    # ------------------------------------------------------------------
+
+    _DEFAULT_LABELS = {
+        "report_title": "Daily News Scout Report",
+        "date_label": "Date",
+        "topic_prefix": "Topic",
+        "subject_template": "Daily News Scout Report – {date}",
+    }
+
+    def translate_email_labels(self, language: str) -> dict:
+        """Return translated email structural strings for *language*.
+
+        When *language* is ``"en"``, returns English defaults without an LLM
+        call.  For any other ISO 639-1 code a single LLM request translates
+        the four label strings.
+        """
+        if language == "en":
+            return dict(self._DEFAULT_LABELS)
+
+        prompt = (
+            f"Translate the following JSON values into the language with "
+            f"ISO 639-1 code '{language}'. Keep the JSON keys unchanged and "
+            f"keep the '{{date}}' placeholder in subject_template intact.\n\n"
+            f"```json\n{json.dumps(self._DEFAULT_LABELS)}\n```\n\n"
+            f"Return ONLY valid JSON – no explanation."
+        )
+        content = self._call_llm(prompt, temperature=0.0)
+        try:
+            labels = self._parse_json_response(content)
+            # Ensure all required keys are present
+            for key in self._DEFAULT_LABELS:
+                if key not in labels:
+                    labels[key] = self._DEFAULT_LABELS[key]
+            return labels
+        except Exception:
+            logger.warning(
+                "Failed to translate email labels for '%s'; using English defaults.",
+                language,
+            )
+            return dict(self._DEFAULT_LABELS)
 
     # ------------------------------------------------------------------
     # Main entry point
     # ------------------------------------------------------------------
 
-    def scout_topic(self, topic: dict) -> tuple[str, list[dict]]:
+    def scout_topic(
+        self, topic: dict, language: str = "en"
+    ) -> tuple[str, list[dict]]:
         """Scout news for a topic dict and return (report_markdown, sources)."""
         name = topic.get("name", "Unknown Topic")
         description = topic.get("description", "")
@@ -289,5 +347,7 @@ class NewsScoutAgent:
         logger.info("Total articles collected: %d", len(all_articles))
 
         # Step 3 – generate report
-        report = self.generate_report(name, description, all_articles, sources)
+        report = self.generate_report(
+            name, description, all_articles, sources, language=language
+        )
         return report, sources
