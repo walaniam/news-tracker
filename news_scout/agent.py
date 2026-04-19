@@ -78,33 +78,120 @@ class NewsScoutAgent:
     # ------------------------------------------------------------------
 
     def identify_sources(
-        self, topic_name: str, topic_description: str
+        self,
+        topic_name: str,
+        topic_description: str,
+        regions: Optional[list[str]] = None,
+        languages: Optional[list[str]] = None,
     ) -> list[dict]:
-        """Ask the LLM to identify up to 10 globally diverse news portals."""
+        """Ask the LLM to identify up to 10 news portals best suited to *topic*.
+
+        ``regions`` and ``languages`` are soft hints taken from the topic
+        config.  ``languages`` may be a list of ISO 639-1 codes or contain the
+        sentinel ``"any"`` to allow any language (native-language regional
+        outlets welcome).  When a concrete language list is supplied, a
+        safety-net filter drops returned sources whose declared language
+        clearly falls outside it.
+        """
+        # Normalise hint inputs
+        norm_regions = [r.strip() for r in (regions or []) if r and r.strip()]
+        norm_languages = [l.strip().lower() for l in (languages or []) if l and l.strip()]
+        any_language = (not norm_languages) or ("any" in norm_languages)
+
+        # Build optional hint blocks
+        region_hint = (
+            "- Prefer coverage that spans these regions / perspectives: "
+            + ", ".join(norm_regions)
+            + ". These are soft hints — you may add one or two outlets from "
+            "other regions if that meaningfully broadens perspective.\n"
+            if norm_regions
+            else ""
+        )
+        if any_language:
+            language_hint = (
+                "- Any publication language is acceptable. For regional or "
+                "country-specific topics, INCLUDE native-language local "
+                "outlets (e.g. Arabic, Hebrew, Farsi, Polish, German, "
+                "Mandarin) alongside international English-language ones to "
+                "capture local perspective.\n"
+            )
+        else:
+            language_hint = (
+                "- Prefer outlets that publish in these languages (ISO 639-1): "
+                + ", ".join(norm_languages)
+                + ". Treat as a soft hint; you may include one additional "
+                "outlet in another language if it is the single best source "
+                "for this topic.\n"
+            )
+
         prompt = (
             f'You are a news research expert. For the topic "{topic_name}" '
-            f"({topic_description}), identify up to 10 diverse, global news "
-            "portals with relevant, high-quality coverage.\n\n"
-            "Requirements:\n"
-            "- Include sources from different regions and perspectives "
-            "(not only Western/US media).\n"
-            "- For regional topics, include local/regional outlets as well as "
-            "global ones.\n"
-            "- Prefer outlets that publish RSS feeds.\n\n"
+            f"({topic_description}), pick up to 10 news outlets that together "
+            "provide the highest-quality, most relevant, and most diverse "
+            "coverage of THIS specific topic.\n\n"
+            "Step 1 — reason briefly (silently) about the topic's scope:\n"
+            "  • Is it geographically focused (a country / region) or global?\n"
+            "  • Is it domain-specific (finance, technology, science, sports, "
+            "politics, culture) or general news?\n"
+            "  • Which audiences and stakeholders are most affected?\n"
+            "Step 2 — pick outlets that best match that scope.\n\n"
+            "General requirements:\n"
+            "- Aim for DIVERSE perspectives; do not default to only "
+            "Western/US media.\n"
+            "- For regional topics: include local outlets close to the story, "
+            "ideally in the native language(s) of the region, plus a few "
+            "reputable international outlets for context.\n"
+            "- For domain-specific topics: prefer specialist/sector outlets "
+            "(e.g. financial press for markets, tech press for AI) mixed with "
+            "one or two broad-coverage outlets.\n"
+            "- For global general-interest topics: span continents and "
+            "editorial traditions.\n"
+            "- Prefer outlets that publish RSS feeds.\n"
+            f"{region_hint}"
+            f"{language_hint}"
+            "\nIllustrative examples (do NOT copy these unless they truly fit):\n"
+            "  • Regional conflict in country X → major local outlets in X's "
+            "native language + neighbour-country outlets + 2-3 global wires "
+            "(Reuters, AFP, BBC).\n"
+            "  • National stock market (e.g. Warsaw) → domestic financial "
+            "press in the local language (e.g. Parkiet, Bankier, "
+            "Rzeczpospolita/Ekonomia) + major global business outlets "
+            "(Bloomberg, FT, WSJ, Reuters).\n"
+            "  • AI / frontier tech → specialist tech press (The Verge, Ars "
+            "Technica, MIT Tech Review, Wired) + research-oriented outlets + "
+            "one or two global generalists.\n\n"
             "For each source provide:\n"
-            '  "name"    : outlet name\n'
-            '  "url"     : main website URL\n'
-            '  "rss_url" : RSS feed URL (required)\n'
-            '  "region"  : region or perspective '
-            '(e.g. "global", "Middle East", "Asia")\n\n'
-            "Example outlets for a Middle East topic: Al Jazeera, Haaretz, "
-            "Tehran Times, Arab News, BBC, Reuters, France 24, Deutsche Welle, "
-            "Xinhua, The Guardian.\n\n"
+            '  "name"     : outlet name\n'
+            '  "url"      : main website URL\n'
+            '  "rss_url"  : RSS feed URL (required)\n'
+            '  "region"   : region or perspective '
+            '(free text, e.g. "Global", "USA", "Warsaw", "Middle East")\n'
+            '  "language" : primary publication language as ISO 639-1 code '
+            '(e.g. "en", "pl", "ar", "he", "fa", "de", "zh")\n\n'
             "Return ONLY a JSON array – no explanation:\n"
-            '[{"name":"...","url":"...","rss_url":"...","region":"..."}]'
+            '[{"name":"...","url":"...","rss_url":"...","region":"...","language":"..."}]'
         )
         content = self._call_llm(prompt)
         sources = self._parse_json_response(content)
+
+        # Safety-net language filter: when a concrete language list is given,
+        # drop sources whose declared language is clearly outside it.  Sources
+        # without a language field are kept (avoids over-filtering on older
+        # responses).
+        if not any_language:
+            allowed = set(norm_languages)
+            filtered: list[dict] = []
+            for src in sources:
+                lang = (src.get("language") or "").strip().lower()
+                if lang and lang not in allowed:
+                    logger.debug(
+                        "Dropping source %r: language %r not in allowed %s",
+                        src.get("name"), lang, sorted(allowed),
+                    )
+                    continue
+                filtered.append(src)
+            sources = filtered
+
         return sources[:10]
 
     # ------------------------------------------------------------------
@@ -337,11 +424,21 @@ class NewsScoutAgent:
         """Scout news for a topic dict and return (report_markdown, sources)."""
         name = topic.get("name", "Unknown Topic")
         description = topic.get("description", "")
+        regions = topic.get("regions") or None
+        languages = topic.get("languages") or None
 
         logger.info("Scouting: %s", name)
+        if regions or languages:
+            logger.info(
+                "  Source-selection hints — regions: %s, languages: %s",
+                regions or "(none)",
+                languages or "(none)",
+            )
 
         # Step 1 – choose portals
-        sources = self.identify_sources(name, description)
+        sources = self.identify_sources(
+            name, description, regions=regions, languages=languages
+        )
         logger.info("Sources selected: %s", [s.get("name") for s in sources])
 
         # Step 2 – collect articles

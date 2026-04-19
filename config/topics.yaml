@@ -5,19 +5,39 @@
 topics:
   - name: "Middle East Conflict"
     description: >
-      Middle East conflict in Strait of Hormuz. Diplomacy, ceasefire negotiations, humanitarian
-      situations, oil extraction and delivery. News from different perspectives like local media
-      of the region (Iran, Israel, Gaza, Lebanon) but also in media from USA, Europe, Russia, China.      
+      Ongoing conflicts, diplomacy, ceasefire negotiations, humanitarian
+      situations and Strait of Hormuz in the Middle East, including Iran, Israel, USA, Russia,
+      China, Gaza, Lebanon, and the wider region.
+    regions:
+      - "Middle East"
+      - "Russia"
+      - "Ukraine"
+      - "Europe"
+      - "Global"
+    languages:
+      - "any"
 
   - name: "Artificial Intelligence"
     description: >
       AI technology breakthroughs, large language models, regulation, safety,
       and the societal and economic impact of AI systems.
-
-  - name: "Stock Markets - Buy or Sell"
-    description: >
-      What stocks to buy in coming weeks? What stocks to avoid. What stocks gain popularity and why? Check that on US, European and Polish stock markets.
+    regions:
+      - "Global"
+      - "USA"
+      - "Europe"
+    languages:
+      - "en"
 
   - name: "Stock Markets"
     description: >
       Stock gaining popularity and attention. Rising stocks. Economical and geopolitical signals of buy or sell stocks.
+    regions:
+      - "USA"
+      - "Europe"
+      - "Poland"
+      - "Global"
+    languages:
+      - "en"
+      - "pl"
+      - "fr"
+      - "zh"
